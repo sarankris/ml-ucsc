@@ -10,19 +10,21 @@ POSITIVE_TARGET = 5
 NEGATIVE_TARGET = 6
 MAX_DIMENSION = 785
 
-POSITIVE_IDX = 90
-NEGATIVE_IDX = 1226
+POSITIVE_IDX = 101
+NEGATIVE_IDX = 100
 
 np.set_printoptions(suppress=True)
-np.set_printoptions(precision=4)
+np.set_printoptions(precision=8)
 
 
 def getPDF(queryVec, meanVec, invCov, detCov):
 	queryMean = np.array([np.subtract(queryVec, meanVec)])
 	queryMeanTrans = queryMean.transpose()
+	print("Saran queryMeanTrans =", queryMeanTrans)
 	bottom = 1 / (2 * math.pi * np.sqrt(detCov))
-	raised = np.linalg.det(np.dot(np.dot(queryMean, invCov), queryMeanTrans)) / 2
+	raised = (np.dot(np.dot(queryMean, invCov), queryMeanTrans)) / 2
 	pdf = bottom * np.exp(-1 * raised)
+	print("Saran bottom, raised =", bottom, raised)
 	return pdf
 
 class NumberImagePCA:
@@ -67,7 +69,13 @@ class NumberImagePCA:
 		print("fVMatrix =", self.fVMatrix.shape)
 		#print("fVValue =", self.fVValue)
 		print("Norm=", np.linalg.norm(self.fVMatrix[0]))
-		print("Orthogonal=", np.dot(self.fVMatrix[0,:], self.fVMatrix[1,:]))
+		print("Orthogonal=", np.dot(self.fVMatrix[0, :], self.fVMatrix[1, :]))
+		AV = np.dot(self.fCMatrix, self.fVMatrix[0, :])
+		LV = np.dot(self.fVValue[0], self.fVMatrix[0, :])
+		print("AV=", AV)
+		print("LV=", LV)
+		print("AV - LV =", AV - LV)
+
 
 	def _createP(self):
 		assert (len(self.fVMatrix))
@@ -83,6 +91,14 @@ class NumberImagePCA:
 
 	def getImagesPCA(self, dimension=2):
 		return self.fPMatrix[:, :dimension]
+
+	def getQueryImagePCA(self, queryImage, dimension=2):
+		flatimages = list()
+		flatimages.append(queryImage.ravel())
+		xMatrix = np.asarray(flatimages, dtype=np.float64)
+		zMatrix = np.subtract(xMatrix, self.fMeanVector)
+		pMatrix = np.dot(zMatrix, np.transpose(self.fVMatrix[:dimension,:]))
+		return pMatrix
 
 	def showEigen(self, idx, subplt):
 		subplt.imshow(self.fVMatrix[idx].reshape(28, 28), interpolation='None', cmap=cm.gray)
@@ -132,6 +148,9 @@ class NumberImagePCA:
 		fig = plt.figure()
 		ax = fig.add_subplot(111, facecolor='black')
 		ax.scatter(P[random_order, 1], P[random_order, 0], s=5, linewidths=0, facecolors=cols[random_order, :], marker="o")
+		ax.plot(P[POSITIVE_IDX][0], P[POSITIVE_IDX][1], marker='*', color='yellow', label=str(self.fLabels[POSITIVE_IDX]))
+		ax.plot(P[NEGATIVE_IDX][0], P[NEGATIVE_IDX][1], marker='*', color='blue', label=str(self.fLabels[NEGATIVE_IDX]))
+		ax.legend(loc='lower left', numpoints=1, ncol=3, fontsize=10, bbox_to_anchor=(0, 0))
 		ax.set_aspect('equal')
 		plt.gca().invert_yaxis()
 		plt.title('Saran - scatter plot of Principal components')
@@ -156,6 +175,9 @@ class NumberImageHist:
 		self.fPOS_List = [[t[0], t[1]] for i, t in enumerate(self.fImages) if self.fLabels[i] == POSITIVE_TARGET]
 		self.fNEG_List = [[t[0], t[1]] for i, t in enumerate(self.fImages) if self.fLabels[i] == NEGATIVE_TARGET]
 
+		self.fPOS_List_Count = len(self.fPOS_List)
+		self.fNEG_List_Count = len(self.fNEG_List)
+
 		self.fPOS_V1_List = [t[0] for i, t in enumerate(self.fImages) if self.fLabels[i] == POSITIVE_TARGET]
 		self.fPOS_V2_List = [t[1] for i, t in enumerate(self.fImages) if self.fLabels[i] == POSITIVE_TARGET]
 
@@ -172,15 +194,6 @@ class NumberImageHist:
 		self.fPOS_Hist = np.zeros(shape=(self.fBinCount, self.fBinCount))
 		self.fNEG_Hist = np.zeros(shape=(self.fBinCount, self.fBinCount))
 
-		# Guassian meta info
-		self.fPOS_V1_Mean = np.mean(self.fPOS_V1_List)
-		self.fPOS_V2_Mean = np.mean(self.fPOS_V2_List)
-		self.fNEG_V1_Mean = np.mean(self.fNEG_V1_List)
-		self.fNEG_V2_Mean = np.mean(self.fNEG_V2_List)
-
-		self.fPOS_MeanVec = np.array([self.fPOS_V1_Mean, self.fPOS_V2_Mean])
-		self.fNEG_MeanVec = np.array([self.fNEG_V1_Mean, self.fNEG_V2_Mean])
-
 	def _createHist(self):
 		for v1, v2 in zip(self.fPOS_V1_List, self.fPOS_V2_List):
 			r = int(round((self.fBinCount - 1) * ((v1 - self.fV1_Min) / (self.fV1_Max - self.fV1_Min))))
@@ -192,7 +205,19 @@ class NumberImageHist:
 			c = int(round((self.fBinCount - 1) * ((v2 - self.fV2_Min) / (self.fV2_Max - self.fV2_Min))))
 			self.fNEG_Hist[r, c] = self.fNEG_Hist[r, c] + 1
 
+		self.fPOS_Hist_NP = np.histogram2d(self.fPOS_V1_List, self.fPOS_V2_List, self.fBinCount)[0]
+		self.fNEG_Hist_NP = np.histogram2d(self.fNEG_V1_List, self.fNEG_V2_List, self.fBinCount)[0]
+
 	def _createGuasian(self):
+		# Guassian meta info
+		self.fPOS_V1_Mean = np.mean(self.fPOS_V1_List)
+		self.fPOS_V2_Mean = np.mean(self.fPOS_V2_List)
+		self.fNEG_V1_Mean = np.mean(self.fNEG_V1_List)
+		self.fNEG_V2_Mean = np.mean(self.fNEG_V2_List)
+
+		self.fPOS_MeanVec = np.array([self.fPOS_V1_Mean, self.fPOS_V2_Mean])
+		self.fNEG_MeanVec = np.array([self.fNEG_V1_Mean, self.fNEG_V2_Mean])
+
 		self.fPOS_Cov = np.cov(self.fPOS_List, ddof=1, rowvar=False)
 		self.fNEG_Cov = np.cov(self.fNEG_List, ddof=1, rowvar=False)
 		self.fPOS_InvCov = np.linalg.inv(self.fPOS_Cov)
@@ -201,20 +226,35 @@ class NumberImageHist:
 		self.fPOS_Det = np.linalg.det(self.fPOS_Cov)
 		self.fNEG_Det = np.linalg.det(self.fNEG_Cov)
 
-	def getPDF(queryVec, meanVec, invCov, detCov):
-		queryMean = np.array([np.subtract(queryVec, meanVec)])
-		queryMeanTrans = queryMean.transpose()
-		bottom = 1 / (2 * math.pi * np.sqrt(detCov))
-		raised = np.linalg.det(np.dot(np.dot(queryMean, invCov), queryMeanTrans)) / 2
-		pdf = bottom * np.exp(-1 * raised)
-		return pdf
 
+	def showHist(self):
+		plt.imshow(self.fPOS_Hist.reshape(self.fBinCount, self.fBinCount), interpolation='None', cmap=cm.gray)
+		plt.title('Saran - POS Histogram')
+		plt.show()
+		plt.imshow(self.fNEG_Hist.reshape(self.fBinCount, self.fBinCount), interpolation='None', cmap=cm.gray)
+		plt.title('Saran - NEG Histogram')
+		plt.show()
 
 	def printHist(self):
+		print("fPOS_Count", len(self.fPOS_List))
+		print("fNEG_Count", len(self.fNEG_List))
+		print("fV1_Min", self.fV1_Min)
+		print("fV2_Min", self.fV2_Min)
+		print("fV1_Max", self.fV1_Max)
+		print("fV2_Max", self.fV2_Max)
+
+		print("fPOS_MeanVec", self.fPOS_MeanVec)
+		print("fNEG_MeanVec", self.fNEG_MeanVec)
+
+		print("POS Hist count", sum(self.fPOS_Hist))
+		print("NEG Hist count", sum(self.fNEG_Hist))
+
 		print("POSITIVE TARGET", POSITIVE_TARGET)
 		print("POSITIVE HIST\n", self.fPOS_Hist)
+		#print("POSITIVE HIST NP\n", self.fPOS_Hist_NP)
 		print("NEGATIVE TARGET", NEGATIVE_TARGET)
 		print("NEGATIVE HIST\n", self.fNEG_Hist)
+		#print("NEGATIVE HIST NP\n", self.fNEG_Hist_NP)
 
 	def printGuassian(self):
 		print("fPOS_MeanVec", self.fPOS_MeanVec)
@@ -226,12 +266,36 @@ class NumberImageHist:
 		print("fPOS_Det", self.fPOS_Det)
 		print("fNEG_Det", self.fNEG_Det)
 
+	def queryHistProb(self, queryVec):
+		r = int(round((self.fBinCount - 1) * ((queryVec[0][0] - self.fV1_Min) / (self.fV1_Max - self.fV1_Min))))
+		c = int(round((self.fBinCount - 1) * ((queryVec[0][1] - self.fV2_Min) / (self.fV2_Max - self.fV2_Min))))
+		np = self.fPOS_Hist[r, c]
+		nn = self.fNEG_Hist[r, c]
+		pos_prob = None
+		neg_prob = None
+		if (np + nn) != 0:
+			pos_prob = np / (np + nn)
+			neg_prob = nn / (np + nn)
+		print("BIN idx =", r, c, np, nn)
+		print("POS Hist Probability =", pos_prob)
+		print("NEG Hist Probability =", neg_prob)
+
+	def queryGuassProb(self, queryVec):
+		pos_pdf = self.fPOS_List_Count * getPDF(queryVec[0], self.fPOS_MeanVec, self.fPOS_InvCov, self.fPOS_Det)
+		neg_pdf = self.fNEG_List_Count * getPDF(queryVec[0], self.fNEG_MeanVec, self.fNEG_InvCov, self.fNEG_Det)
+		pos_prob = pos_pdf / (pos_pdf + neg_pdf)
+		neg_prob = neg_pdf / (pos_pdf + neg_pdf)
+		print("POS PDF=", pos_pdf)
+		print("NEG PDF=", neg_pdf)
+		print("POS Guass Probability =", pos_prob)
+		print("NEG Guass Probability =", neg_prob)
+
 
 def mainRoutine():
 	digits_interested = [POSITIVE_TARGET, NEGATIVE_TARGET]
 	allimages, alllabels = load_mnist('training', digits=digits_interested)
 	pp2 = NumberImagePCA(alllabels, allimages)
-	showImages = [25, 50]
+	showImages = [POSITIVE_IDX, NEGATIVE_IDX]
 	for imgID in showImages:
 		fig = plt.figure()
 		pp2.showImage(imgID, fig.add_subplot(241))
@@ -242,13 +306,30 @@ def mainRoutine():
 		pp2.showImageRecovered(imgID, fig.add_subplot(246), 10)
 		pp2.showImageRecovered(imgID, fig.add_subplot(247), 100)
 		pp2.showImageRecovered(imgID, fig.add_subplot(248), MAX_DIMENSION)
-		#show()
+		show()
 
-	#pp2.showScatterPlot1()
+	pp2.showScatterPlot1()
 
-	histNumbers = NumberImageHist(alllabels, pp2.getImagesPCA())
+	pVec = pp2.getImagesPCA()
+	histNumbers = NumberImageHist(alllabels, pVec)
 	histNumbers.printHist()
+	histNumbers.showHist()
 	histNumbers.printGuassian()
+
+	queryVec = pp2.getQueryImagePCA(allimages[POSITIVE_IDX])
+	print("Query pos vec =", queryVec)
+	print("Query pos org =", pVec[POSITIVE_IDX])
+	print("Query pos value =", alllabels[POSITIVE_IDX])
+
+	histNumbers.queryHistProb(queryVec)
+	histNumbers.queryGuassProb(queryVec)
+
+	queryVec = pp2.getQueryImagePCA(allimages[NEGATIVE_IDX])
+	print("Query neg vec =", queryVec)
+	print("Query neg org =", pVec[NEGATIVE_IDX])
+	print("Query neg value =", alllabels[NEGATIVE_IDX])
+	histNumbers.queryHistProb(queryVec)
+	histNumbers.queryGuassProb(queryVec)
 
 
 ########################################################

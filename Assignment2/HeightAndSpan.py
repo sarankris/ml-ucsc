@@ -69,7 +69,7 @@ def doWork(options):
 	print("Max span:  ", MAX_SPAN)
 
 	BIN_COUNT = math.ceil(np.log2(len(HEIGHT_FEMALE)) + 1)
-	#BIN_COUNT = 6
+	BIN_COUNT = 7
 	print("Bin count: ", BIN_COUNT)
 
 	HIST_MALE = np.zeros(shape=(BIN_COUNT, BIN_COUNT))
