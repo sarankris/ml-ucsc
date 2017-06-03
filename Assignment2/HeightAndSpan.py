@@ -69,7 +69,7 @@ def doWork(options):
 	print("Max span:  ", MAX_SPAN)
 
 	BIN_COUNT = math.ceil(np.log2(len(HEIGHT_FEMALE)) + 1)
-	BIN_COUNT = 7
+	BIN_COUNT = 8
 	print("Bin count: ", BIN_COUNT)
 
 	HIST_MALE = np.zeros(shape=(BIN_COUNT, BIN_COUNT))
@@ -77,14 +77,14 @@ def doWork(options):
 
 	for h, s, g in INPUT_DATA:
 		if g == "Female":
-			r = round((BIN_COUNT - 1) * ((h - MIN_HEIGHT) / (MAX_HEIGHT - MIN_HEIGHT)))
-			c = round((BIN_COUNT - 1) * ((s - MIN_SPAN) / (MAX_SPAN - MIN_SPAN)))
+			r = int(np.around((BIN_COUNT - 1) * ((h - MIN_HEIGHT) / (MAX_HEIGHT - MIN_HEIGHT))))
+			c = int(np.around((BIN_COUNT - 1) * ((s - MIN_SPAN) / (MAX_SPAN - MIN_SPAN))))
 			HIST_FEMALE[r, c] = HIST_FEMALE[r, c] + 1
 
 	for h, s, g in INPUT_DATA:
 		if g == "Male":
-			r = round((BIN_COUNT - 1) * ((h - MIN_HEIGHT) / (MAX_HEIGHT - MIN_HEIGHT)))
-			c = round((BIN_COUNT - 1) * ((s - MIN_SPAN) / (MAX_SPAN - MIN_SPAN)))
+			r = int(np.around((BIN_COUNT - 1) * ((h - MIN_HEIGHT) / (MAX_HEIGHT - MIN_HEIGHT))))
+			c = int(np.around((BIN_COUNT - 1) * ((s - MIN_SPAN) / (MAX_SPAN - MIN_SPAN))))
 			HIST_MALE[r, c] = HIST_MALE[r, c] + 1
 
 	writeCSV("Female_Histogram.csv", HIST_FEMALE)
@@ -98,8 +98,8 @@ def doWork(options):
 	OUTPUT = np.zeros(shape=(BIN_COUNT, BIN_COUNT))
 	QUERY_OUTPUT = {}
 	for h, s in QUERY_DATA:
-		r = round((BIN_COUNT - 1) * ((h - MIN_HEIGHT) / (MAX_HEIGHT - MIN_HEIGHT)))
-		c = round((BIN_COUNT - 1) * ((s - MIN_SPAN) / (MAX_SPAN - MIN_SPAN)))
+		r = int(np.around((BIN_COUNT - 1) * ((h - MIN_HEIGHT) / (MAX_HEIGHT - MIN_HEIGHT))))
+		c = int(np.around((BIN_COUNT - 1) * ((s - MIN_SPAN) / (MAX_SPAN - MIN_SPAN))))
 		probFemale = HIST_FEMALE[r, c] / (HIST_FEMALE[r, c] + HIST_MALE[r, c])
 		if HIST_FEMALE[r, c] + HIST_MALE[r, c] == 0:
 			print("NAAAAAAN")
