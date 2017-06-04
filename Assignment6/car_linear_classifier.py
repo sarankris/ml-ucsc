@@ -8,11 +8,12 @@ import operator
 def writeCSV(filePath, data):
 	np.savetxt(filePath, data, fmt='%.8f,')
 
-def convertNominal(feature):
-	nominals = list(set(feature))
-	ordinal = np.full((len(feature), len(nominals)), 0, dtype=np.float64)
+def convertNominal(feature, init_val=0):
+	nominals = sorted(list(set([str(i) for i in feature])))
+	print (nominals)
+	ordinal = np.full((len(feature), len(nominals)), init_val, dtype=np.float64)
 	for idx, val in enumerate(feature):
-		ordinal[idx, nominals.index(val)] = 1
+		ordinal[idx, nominals.index(str(val))] = 1
 	return ordinal
 
 def convertReccoToBinary(feature, neg_features):
@@ -33,7 +34,7 @@ def readTrainingData(filepath):
 	persons = convertNominal(sheet.col_values(3)[2:])
 	trunk = convertNominal(sheet.col_values(4)[2:])
 	safety = convertNominal(sheet.col_values(5)[2:])
-	recommendation = convertNominal(sheet.col_values(6)[2:])
+	recommendation = convertNominal(sheet.col_values(6)[2:], init_val=-1)
 	recommendation_binary = convertReccoToBinary(sheet.col_values(6)[2:], ['unacc'])
 	feature_matrix = np.hstack((np.full((tot_num_rows, 1), 1, dtype=np.float64), price, maintenance, doors, persons, trunk, safety))
 	return feature_matrix, recommendation_binary[:,0], recommendation
@@ -50,7 +51,7 @@ def doBinaryClassification(binary_classifier, feature_matrix):
 	target_result = np.zeros(np.alen(feature_matrix))
 	for idx, feature in enumerate(feature_matrix):
 		result = np.dot(feature, binary_classifier)
-		target_result[idx] = 1 if result >= 0 else -1
+		target_result[idx] = 1 if result > 0 else -1
 	return target_result
 
 def doMultiClassification(multi_classifier, feature_matrix):
@@ -78,7 +79,7 @@ def createBinaryMatchMatrix(binary_target_actual, binary_target_result):
 
 
 def createMultiMatchMatrix(multi_target_actual, multi_target_result):
-	match = np.zeros((6, 6), dtype=np.int64)
+	match = np.zeros((4, 4), dtype=np.int64)
 	for actual, result in zip(multi_target_actual.tolist(), multi_target_result.tolist()):
 		match[int(actual), int(result)] += 1
 	return match
@@ -87,8 +88,7 @@ def doWork(options_dict):
 	print()
 	feature_matrix, binary_target_actual, multi_target_actual = readTrainingData(options_dict['inputfile'])
 
-	print (feature_matrix.shape)
-	print (multi_target_actual.shape)
+	multi_target_actual_denominal = np.asarray([np.argmax(val) for val in multi_target_actual])
 
 	binary_classifier = createBinaryClassifier(feature_matrix, binary_target_actual)
 
@@ -103,18 +103,19 @@ def doWork(options_dict):
 	print(multi_classifier.shape)
 	writeCSV("multi_classifier.csv", multi_classifier)
 
-	"""
 	binary_target_result = doBinaryClassification(binary_classifier, feature_matrix)
 	match_binary = [(idx, targets) for idx, targets in
 					   enumerate(zip(binary_target_actual.tolist(), binary_target_result.tolist())) if
 					   targets[0] == targets[1]]
+	print ("Binary result =", len(binary_target_result[binary_target_result==1]))
 	print ("Binary Success rate =", 100 * len(match_binary) / len(binary_target_result), "%")
 
 	multi_target_result = doMultiClassification(multi_classifier, feature_matrix)
 	match_multi = [(idx, targets) for idx, targets in
-					   enumerate(zip(orig_multi_target_actual.tolist(), multi_target_result.tolist())) if
-					   targets[0] == targets[1]]
+				   enumerate(zip(multi_target_actual_denominal.tolist(), multi_target_result.tolist())) if
+				   int(targets[0]) == int(targets[1])]
 	print("Multi Success rate =", 100 * len(match_multi) / len(multi_target_result), "%")
+
 
 	binary_match = createBinaryMatchMatrix(binary_target_actual, binary_target_result)
 	print ("Binary match:\n", binary_match)
@@ -131,20 +132,23 @@ def doWork(options_dict):
 		print("{} : {}".format(key, value))
 
 	print()
-	multi_match = createMultiMatchMatrix(orig_multi_target_actual, multi_target_result)
+
+	multi_match = createMultiMatchMatrix(multi_target_actual_denominal, multi_target_result)
 	print("Multi match:\n", multi_match)
 	writeCSV("multi_match.csv", multi_match)
 
 	multi_stats_ppv = {}
-	for i in range(0,6):
-		multi_stats_ppv[str(i)] = multi_match[i,i] / np.sum(multi_match[:,i])
+	for i in range(0,4):
+		if np.sum(multi_match[:,i]) != 0:
+			multi_stats_ppv[str(i)] = multi_match[i,i] / np.sum(multi_match[:,i])
+		else:
+			multi_stats_ppv[str(i)] = None
 
 	print()
 	print ("PPVs:")
-	for key, value in sorted(multi_stats_ppv.items(), key=operator.itemgetter(1)):
+	for key, value in multi_stats_ppv.items():
 		print("{} : {}".format(key, value))
 
-	"""
 	return
 
 ########################################################
